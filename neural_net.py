@@ -8,11 +8,12 @@ from keras.datasets import cifar100
 import keras.backend as K
 from keras.optimizers import Adam, Nadam, RMSprop
 import tensorflow as tf
-from hyperopt import STATUS_OK
+from hyperopt import STATUS_OK, STATUS_FAIL
 
 import uuid
 from bson import json_util
 import json
+import traceback
 import os
 
 
@@ -24,14 +25,18 @@ __license__ = "Apache License 2.0"
 NB_CHANNELS = 3
 IMAGE_BORDER_LENGTH = 32
 # NB_CLASSES = 10
-NB_CLASSES = 100
+NB_CLASSES_FINE = 100
+NB_CLASSES_COARSE = 20
 
 # (x_train, y_train), (x_test, y_test) = cifar10.load_data()
+(_, y_train_c), (_, y_test_coarse) = cifar100.load_data(label_mode='coarse')
 (x_train, y_train), (x_test, y_test) = cifar100.load_data(label_mode='fine')
 x_train = x_train.astype('float32') / 255.0 - 0.5
 x_test = x_test.astype('float32') / 255.0 - 0.5
-y_train = keras.utils.to_categorical(y_train, NB_CLASSES)
-y_test = keras.utils.to_categorical(y_test, NB_CLASSES)
+y_train = keras.utils.to_categorical(y_train, NB_CLASSES_FINE)
+y_test = keras.utils.to_categorical(y_test, NB_CLASSES_FINE)
+y_train_c = keras.utils.to_categorical(y_train_c, NB_CLASSES_COARSE)
+y_test_coarse = keras.utils.to_categorical(y_test_coarse, NB_CLASSES_COARSE)
 
 # You may want to reduce this considerably if you don't have a killer GPU:
 BATCH_SIZE = 700
@@ -47,55 +52,92 @@ optimizer_str_to_class = {
 
 def build_and_optimize_cnn(hype_space):
     """Build a convolutional neural network and train it."""
-    K.set_image_data_format('channels_last')
-    model = build_model(hype_space)
+    try:
+        K.set_image_data_format('channels_last')
+        model = build_model(hype_space)
 
-    history = model.fit(
-        x_train,
-        y_train,
-        batch_size=BATCH_SIZE,
-        epochs=EPOCHS,
-        shuffle=True,
-        verbose=1,
-        validation_data=(x_test, y_test)
-    )
-
-    score = model.evaluate(x_test, y_test, verbose=0)
-
-    model_name = "model_{}_{}".format(str(score[1]), str(uuid.uuid4())[:5])
-
-    # Note: to restore the model, you'll need to have a keras callback to save
-    # the best weights and not the final weights. Only the results are saved.
-    results = {
-        'loss': min(history.history['val_loss']),
-        'accuracy': max(history.history['val_acc']),
-        'end_loss': score[0],
-        'end_accuracy': score[1],
-        'model_name': model_name,
-        'space': hype_space,
-        'history': history.history,
-        # To be safer, we should catch errors too and return them as errors.
-        'status': STATUS_OK
-    }
-
-    print("RESULTS:")
-    print(json.dumps(
-        results,
-        default=json_util.default, sort_keys=True,
-        indent=4, separators=(',', ': ')
-    ) + "\n\n")
-    # Save all training results to disks with unique filenames
-    if not os.path.exists("results/"):
-        os.makedirs("results/")
-    with open('results/{}.txt.json'.format(model_name), 'w') as f:
-        json.dump(
-            results, f,
-            default=json_util.default, sort_keys=True,
-            indent=4, separators=(',', ': ')
+        history = model.fit(
+            [x_train],
+            [y_train, y_train_c],
+            batch_size=BATCH_SIZE,
+            epochs=EPOCHS,
+            shuffle=True,
+            verbose=1,
+            validation_data=([x_test], [y_test, y_test_coarse])
         )
 
-    K.clear_session()
-    return results
+        score = model.evaluate([x_test], [y_test, y_test_coarse], verbose=0)
+
+        max_acc = max(history.history['val_fine_outputs_acc'])
+
+        model_name = "model_{}_{}".format(str(max_acc), str(uuid.uuid4())[:5])
+        print("Model name: {}".format(model_name))
+
+        # Note: to restore the model, you'll need to have a keras callback to
+        # save the best weights and not the final weights. Only the results are
+        # saved.
+        print(history.history.keys())
+        print(history.history)
+        print(score)
+        results = {
+            # We plug "-val_fine_outputs_acc" as a
+            # minimizing metric named 'loss' by Hyperopt.
+            'loss': -max_acc,
+            'real_loss': score[0],
+            # Fine stats:
+            'fine_best_loss': min(history.history['val_fine_outputs_loss']),
+            'fine_best_accuracy': max(history.history['val_fine_outputs_acc']),
+            'fine_end_loss': score[1],
+            'fine_end_accuracy': score[3],
+            # Coarse stats:
+            'coarse_best_loss': min(history.history['val_coarse_outputs_loss']),
+            'coarse_best_accuracy': max(history.history['val_coarse_outputs_acc']),
+            'coarse_end_loss': score[2],
+            'coarse_end_accuracy': score[4],
+            # Misc:
+            'model_name': model_name,
+            'space': hype_space,
+            'history': history.history,
+            'status': STATUS_OK
+        }
+
+        print("RESULTS:")
+        print(json.dumps(
+            results,
+            default=json_util.default, sort_keys=True,
+            indent=4, separators=(',', ': ')
+        ))
+        # Save all training results to disks with unique filenames
+        if not os.path.exists("results/"):
+            os.makedirs("results/")
+        with open('results/{}.txt.json'.format(model_name), 'w') as f:
+            json.dump(
+                results, f,
+                default=json_util.default, sort_keys=True,
+                indent=4, separators=(',', ': ')
+            )
+
+        K.clear_session()
+        del model
+
+        return results
+
+    except Exception as err:
+        try:
+            K.clear_session()
+        except:
+            pass
+        err_str = str(err)
+        print(err_str)
+        traceback_str = str(traceback.format_exc())
+        print(traceback_str)
+        return {
+            'status': STATUS_FAIL,
+            'err': err_str,
+            'traceback': traceback_str
+        }
+
+    print("\n\n")
 
 
 def build_model(hype_space):
@@ -129,10 +171,9 @@ def build_model(hype_space):
 
         if hype_space['use_BN']:
             current_layer = bn(current_layer)
-            print(current_layer._keras_shape)
 
         if i > 0 and hype_space['residual'] is not None:
-            current_layer = bn(residual(current_layer, n_filters, hype_space))
+            current_layer = residual(current_layer, n_filters, hype_space)
             print(current_layer._keras_shape)
 
         if hype_space['use_allconv_pooling']:
@@ -165,21 +206,34 @@ def build_model(hype_space):
 
     current_layer = dropout(current_layer, hype_space)
 
-    current_layer = keras.layers.core.Dense(
-        units=NB_CLASSES,
-        activation="softmax",
+    # Dual outputs:
+    fine_outputs = keras.layers.core.Dense(
+        units=NB_CLASSES_FINE,
+        activation="sigmoid",
         kernel_regularizer=keras.regularizers.l2(
-            STARTING_L2_REG * hype_space['l2_weight_reg_mult'])
+            STARTING_L2_REG * hype_space['l2_weight_reg_mult']),
+        name='fine_outputs'
     )(current_layer)
-    print(current_layer._keras_shape)
+
+    coarse_outputs = keras.layers.core.Dense(
+        units=NB_CLASSES_COARSE,
+        activation="sigmoid",
+        kernel_regularizer=keras.regularizers.l2(
+            STARTING_L2_REG * hype_space['l2_weight_reg_mult']),
+        name='coarse_outputs'
+    )(current_layer)
 
     # Finalize model:
-    model = keras.models.Model(input=input_layer, output=current_layer)
+    model = keras.models.Model(
+        inputs=[input_layer],
+        outputs=[fine_outputs, coarse_outputs]
+    )
     model.compile(
         optimizer=optimizer_str_to_class[hype_space['optimizer']](
             lr=0.001 * hype_space['lr_rate_mult']
         ),
         loss='categorical_crossentropy',
+        loss_weights=[1., 0.2],
         metrics=['accuracy']
     )
     return model
@@ -200,13 +254,19 @@ def residual(prev_layer, n_filters, hype_space):
     """Some sort of residual layer, parametrized by the hype_space."""
     current_layer = prev_layer
     for i in range(hype_space['residual']):
+        lin_current_layer = keras.layers.core.Dense(
+            units=n_filters,
+            activation="linear"
+        )(current_layer)
+
         layer_to_add = dropout(current_layer, hype_space)
         layer_to_add = convolution(layer_to_add, n_filters, hype_space)
+
         current_layer = keras.layers.add([
-            current_layer,
+            lin_current_layer,
             layer_to_add
         ])
-    return current_layer
+    return bn(current_layer)
 
 
 def convolution_pooling(prev_layer, n_filters, hype_space):

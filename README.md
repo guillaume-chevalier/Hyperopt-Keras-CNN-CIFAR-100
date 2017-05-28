@@ -16,20 +16,20 @@ Here is a basic overview of the model. I implemented it in such a way that Hyper
 
 ```python
 
-space = {
-    'lr_rate_mult': 1.0,
-    'l2_weight_reg_mult': 1.0,
-    'optimizer': 'Adam',
-    'dropout_drop_proba': 0.0,
-    'use_BN': True,
-    'use_first_4x4': True,
-    'residual': 3,
-    'hidden_units_mult': 1.0,
-    'nb_conv_pool_layers': 3,
-    'use_allconv_pooling': False,
-    'conv_kernel_size': 3,
-    'fc_units_mult': 1.0,
-}
+    space = {
+        'lr_rate_mult': 1.0,
+        'l2_weight_reg_mult': 1.0,
+        'optimizer': 'Adam',
+        'dropout_drop_proba': 0.0,
+        'use_BN': True,
+        'use_first_4x4': True,
+        'residual': 3,
+        'hidden_units_mult': 1.0,
+        'nb_conv_pool_layers': 3,
+        'use_allconv_pooling': False,
+        'conv_kernel_size': 3,
+        'fc_units_mult': 1.0,
+    }
 
 ```
 

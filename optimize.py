@@ -9,6 +9,7 @@ import keras.backend as K
 from hyperopt import hp, tpe, fmin, Trials
 
 import pickle
+import traceback
 
 
 __author__ = "Guillaume Chevalier"
@@ -128,4 +129,10 @@ if __name__ == "__main__":
           "the meta-optimization.\n")
 
     while True:
-        run_a_trial()
+        try:
+            run_a_trial()
+        except Exception as err:
+            err_str = str(err)
+            print(err_str)
+            traceback_str = str(traceback.format_exc())
+            print(traceback_str)
