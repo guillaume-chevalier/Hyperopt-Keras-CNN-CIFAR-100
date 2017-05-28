@@ -10,7 +10,7 @@ Also, the results are pickled to `results.pkl` to be able to resume the TPE meta
 If you want to learn more about Hyperopt, you'll probably want to watch that [video](https://www.youtube.com/watch?v=tteE_Vtmrv4) made by the creator of Hyperopt. Also, if you want to run the model on the CIFAR-10 dataset, you must edit the file `neurak_net.py`. 
 
 
-## The Convolutional Neural Network Model
+## The Deep Convolutional Neural Network Model
 
 Here is a basic overview of the model. I implemented it in such a way that Hyperopt will try to change the shape of the layers and remove or replace some of them according to some pre-parametrized ideas that I have got. Therefore, not only the learning rate is changed with hyperopt, but a lot more parameters. 
 
