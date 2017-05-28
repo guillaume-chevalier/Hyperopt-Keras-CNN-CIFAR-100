@@ -36,6 +36,7 @@ y_test = keras.utils.to_categorical(y_test, NB_CLASSES)
 # You may want to reduce this considerably if you don't have a killer GPU:
 BATCH_SIZE = 700
 EPOCHS = 100
+STARTING_L2_REG = 0.001
 
 optimizer_str_to_class = {
     'Adam': Adam,
@@ -107,6 +108,14 @@ def build_model(hype_space):
 
     current_layer = random_image_mirror_left_right(input_layer)
 
+    if hype_space['use_first_4x4']:
+        current_layer = keras.layers.convolutional.Conv2D(
+            filters=16, kernel_size=(4, 4), strides=(1, 1),
+            padding='same', activation='relu',
+            kernel_regularizer=keras.regularizers.l2(
+                STARTING_L2_REG * hype_space['l2_weight_reg_mult'])
+        )(current_layer)
+
     # Core loop that stacks multiple conv+pool layers, with maybe some
     # residual connections and other fluffs:
     n_filters = int(32 * hype_space['hidden_units_mult'])
@@ -122,7 +131,7 @@ def build_model(hype_space):
             current_layer = bn(current_layer)
             print(current_layer._keras_shape)
 
-        if hype_space['residual'] is not None:
+        if i > 0 and hype_space['residual'] is not None:
             current_layer = bn(residual(current_layer, n_filters, hype_space))
             print(current_layer._keras_shape)
 
@@ -148,7 +157,9 @@ def build_model(hype_space):
 
     current_layer = keras.layers.core.Dense(
         units=int(700 * hype_space['fc_units_mult']),
-        activation="relu"
+        activation="relu",
+        kernel_regularizer=keras.regularizers.l2(
+            STARTING_L2_REG * hype_space['l2_weight_reg_mult'])
     )(current_layer)
     print(current_layer._keras_shape)
 
@@ -156,7 +167,9 @@ def build_model(hype_space):
 
     current_layer = keras.layers.core.Dense(
         units=NB_CLASSES,
-        activation="softmax"
+        activation="softmax",
+        kernel_regularizer=keras.regularizers.l2(
+            STARTING_L2_REG * hype_space['l2_weight_reg_mult'])
     )(current_layer)
     print(current_layer._keras_shape)
 
@@ -177,7 +190,9 @@ def convolution(prev_layer, n_filters, hype_space):
     k = hype_space['conv_kernel_size']
     return keras.layers.convolutional.Conv2D(
         filters=n_filters, kernel_size=(k, k), strides=(1, 1),
-        padding='same', activation='relu'
+        padding='same', activation='relu',
+        kernel_regularizer=keras.regularizers.l2(
+            STARTING_L2_REG * hype_space['l2_weight_reg_mult'])
     )(prev_layer)
 
 
@@ -202,7 +217,9 @@ def convolution_pooling(prev_layer, n_filters, hype_space):
     """
     return keras.layers.convolutional.Conv2D(
         filters=n_filters, kernel_size=(3, 3), strides=(2, 2),
-        padding='valid', activation='linear'
+        padding='valid', activation='linear',
+        kernel_regularizer=keras.regularizers.l2(
+            STARTING_L2_REG * hype_space['l2_weight_reg_mult'])
     )(prev_layer)
 
 

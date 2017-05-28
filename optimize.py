@@ -21,6 +21,8 @@ space = {
     # it vary exponentially, in a multiplicative fashion rather than in
     # a linear fashion, to handle his exponentialy varying nature:
     'lr_rate_mult': hp.loguniform('lr_rate_mult', -0.5, 0.5),
+    # L2 weight decay:
+    'l2_weight_reg_mult': hp.loguniform('l2_weight_reg_mult', -2.5, 2.5),
     # Choice of optimizer:
     'optimizer': hp.choice('optimizer', ['Adam', 'Nadam', 'RMSprop']),
     # Uniform distribution in finding appropriate dropout values
@@ -28,6 +30,8 @@ space = {
     # Use batch normalisation at more places?
     'use_BN': hp.choice('use_BN', [False, True]),
 
+    # Use a first convolution of 4x4?
+    'use_first_4x4': hp.choice('use_first_4x4', [False, True]),
     # Use residual connections? If so, how many more to stack?
     'residual': hp.choice(
         'residual', [None, hp.choice(
@@ -52,13 +56,15 @@ def plot_average_model():
     """Plot a demo model."""
     space_normal_demo_to_plot = {
         'lr_rate_mult': 1.0,
+        'l2_weight_reg_mult': 1.0,
         'optimizer': 'Adam',
         'dropout_drop_proba': 0.0,
         'use_BN': True,
+        'use_first_4x4': True,
         'residual': 3,
         'hidden_units_mult': 1.0,
         'nb_conv_pool_layers': 3,
-        'use_allconv_pooling': True,
+        'use_allconv_pooling': False,
         'conv_kernel_size': 3,
         'fc_units_mult': 1.0,
     }
@@ -98,7 +104,8 @@ def run_a_trial():
     pickle.dump(trials, open("results.pkl", "wb"))
 
     print("\nOPTIMIZATION STEP COMPLETE.\n")
-    print("Best results yet:")
+    print("Best results yet (note that this is calculated on the 'loss' "
+          "metric, so L2 weight decay might end a bit ignore by hyperopt):")
     print(best)
 
 
