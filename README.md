@@ -4,12 +4,10 @@ Auto (meta) optimizing a neural net (and its architecture) on the CIFAR-100 data
 
 To run the search, do: `python3 optimize.py`. You might want to look at `requirements.py` and install some of them manually to acquire GPU acceleration (e.g.: installing TensorFlow and Keras especially by yourself). 
 
-Optimization results will continuously be saved in the "results/" folder (sort files to take best result as human-readable text). 
-Also, the results are pickled to "results.pkl" to be able to resume the TPE meta-optimization process later simply by running the program again with `python3 optimize.py`. 
+Optimization results will continuously be saved in the `results/` folder (sort files to take best result as human-readable text). 
+Also, the results are pickled to `results.pkl` to be able to resume the TPE meta-optimization process later simply by running the program again with `python3 optimize.py`. 
 
-If you want to learn more about Hyperopt, you'll probably want to watch that [video](https://www.youtube.com/watch?v=tteE_Vtmrv4) made by the creator of Hyperopt. 
-
-If you want to run the model on the CIFAR-10 dataset, you must edit the file 
+If you want to learn more about Hyperopt, you'll probably want to watch that [video](https://www.youtube.com/watch?v=tteE_Vtmrv4) made by the creator of Hyperopt. Also, if you want to run the model on the CIFAR-10 dataset, you must edit the file `neurak_net.py`. 
 
 
 ## The Convolutional Neural Network Model
