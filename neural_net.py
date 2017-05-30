@@ -39,9 +39,8 @@ y_train_c = keras.utils.to_categorical(y_train_c, NB_CLASSES_COARSE)
 y_test_coarse = keras.utils.to_categorical(y_test_coarse, NB_CLASSES_COARSE)
 
 # You may want to reduce this considerably if you don't have a killer GPU:
-BATCH_SIZE = 700
 EPOCHS = 100
-STARTING_L2_REG = 0.001
+STARTING_L2_REG = 0.0005
 
 optimizer_str_to_class = {
     'Adam': Adam,
@@ -59,16 +58,16 @@ def build_and_optimize_cnn(hype_space):
         history = model.fit(
             [x_train],
             [y_train, y_train_c],
-            batch_size=BATCH_SIZE,
+            batch_size=int(hype_space['batch_size']),
             epochs=EPOCHS,
             shuffle=True,
             verbose=1,
             validation_data=([x_test], [y_test, y_test_coarse])
-        )
+        ).history
 
         score = model.evaluate([x_test], [y_test, y_test_coarse], verbose=0)
 
-        max_acc = max(history.history['val_fine_outputs_acc'])
+        max_acc = max(history['val_fine_outputs_acc'])
 
         model_name = "model_{}_{}".format(str(max_acc), str(uuid.uuid4())[:5])
         print("Model name: {}".format(model_name))
@@ -76,8 +75,8 @@ def build_and_optimize_cnn(hype_space):
         # Note: to restore the model, you'll need to have a keras callback to
         # save the best weights and not the final weights. Only the results are
         # saved.
-        print(history.history.keys())
-        print(history.history)
+        print(history.keys())
+        print(history)
         print(score)
         results = {
             # We plug "-val_fine_outputs_acc" as a
@@ -85,19 +84,19 @@ def build_and_optimize_cnn(hype_space):
             'loss': -max_acc,
             'real_loss': score[0],
             # Fine stats:
-            'fine_best_loss': min(history.history['val_fine_outputs_loss']),
-            'fine_best_accuracy': max(history.history['val_fine_outputs_acc']),
+            'fine_best_loss': min(history['val_fine_outputs_loss']),
+            'fine_best_accuracy': max(history['val_fine_outputs_acc']),
             'fine_end_loss': score[1],
             'fine_end_accuracy': score[3],
             # Coarse stats:
-            'coarse_best_loss': min(history.history['val_coarse_outputs_loss']),
-            'coarse_best_accuracy': max(history.history['val_coarse_outputs_acc']),
+            'coarse_best_loss': min(history['val_coarse_outputs_loss']),
+            'coarse_best_accuracy': max(history['val_coarse_outputs_acc']),
             'coarse_end_loss': score[2],
             'coarse_end_accuracy': score[4],
             # Misc:
             'model_name': model_name,
             'space': hype_space,
-            'history': history.history,
+            'history': history,
             'status': STATUS_OK
         }
 
@@ -150,42 +149,34 @@ def build_model(hype_space):
 
     current_layer = random_image_mirror_left_right(input_layer)
 
-    if hype_space['use_first_4x4']:
+    if hype_space['first_conv'] is not None:
+        k = hype_space['first_conv']
         current_layer = keras.layers.convolutional.Conv2D(
-            filters=16, kernel_size=(4, 4), strides=(1, 1),
-            padding='same', activation='relu',
+            filters=16, kernel_size=(k, k), strides=(1, 1),
+            padding='same', activation=hype_space['activation'],
             kernel_regularizer=keras.regularizers.l2(
                 STARTING_L2_REG * hype_space['l2_weight_reg_mult'])
         )(current_layer)
 
     # Core loop that stacks multiple conv+pool layers, with maybe some
     # residual connections and other fluffs:
-    n_filters = int(32 * hype_space['hidden_units_mult'])
+    n_filters = int(40 * hype_space['conv_hiddn_units_mult'])
     for i in range(hype_space['nb_conv_pool_layers']):
         print(i)
         print(n_filters)
         print(current_layer._keras_shape)
 
         current_layer = convolution(current_layer, n_filters, hype_space)
-        print(current_layer._keras_shape)
-
         if hype_space['use_BN']:
             current_layer = bn(current_layer)
+        print(current_layer._keras_shape)
 
         if i > 0 and hype_space['residual'] is not None:
             current_layer = residual(current_layer, n_filters, hype_space)
             print(current_layer._keras_shape)
 
-        if hype_space['use_allconv_pooling']:
-            current_layer = convolution_pooling(
-                current_layer, n_filters, hype_space)
-            if hype_space['use_BN']:
-                current_layer = bn(current_layer)
-        else:
-            print(current_layer._keras_shape)
-            current_layer = keras.layers.pooling.MaxPooling2D(
-                pool_size=(2, 2)
-            )(current_layer)
+        current_layer = auto_choose_pooling(
+            current_layer, n_filters, hype_space)
         print(current_layer._keras_shape)
 
         current_layer = dropout(current_layer, hype_space)
@@ -197,16 +188,29 @@ def build_model(hype_space):
     print(current_layer._keras_shape)
 
     current_layer = keras.layers.core.Dense(
-        units=int(700 * hype_space['fc_units_mult']),
-        activation="relu",
+        units=int(700 * hype_space['fc_units_1_mult']),
+        activation=hype_space['activation'],
         kernel_regularizer=keras.regularizers.l2(
             STARTING_L2_REG * hype_space['l2_weight_reg_mult'])
     )(current_layer)
     print(current_layer._keras_shape)
 
-    current_layer = dropout(current_layer, hype_space)
+    current_layer = dropout(
+        current_layer, hype_space, for_convolution_else_fc=False)
 
-    # Dual outputs:
+    if hype_space['one_more_fc'] is not None:
+        current_layer = keras.layers.core.Dense(
+            units=int(550 * hype_space['one_more_fc']),
+            activation=hype_space['activation'],
+            kernel_regularizer=keras.regularizers.l2(
+                STARTING_L2_REG * hype_space['l2_weight_reg_mult'])
+        )(current_layer)
+        print(current_layer._keras_shape)
+
+        current_layer = dropout(
+            current_layer, hype_space, for_convolution_else_fc=False)
+
+    # Two heads as outputs:
     fine_outputs = keras.layers.core.Dense(
         units=NB_CLASSES_FINE,
         activation="sigmoid",
@@ -233,18 +237,21 @@ def build_model(hype_space):
             lr=0.001 * hype_space['lr_rate_mult']
         ),
         loss='categorical_crossentropy',
-        loss_weights=[1., 0.2],
+        loss_weights=[1.0, hype_space['coarse_labels_weight']],
         metrics=['accuracy']
     )
     return model
 
 
-def convolution(prev_layer, n_filters, hype_space):
+def convolution(prev_layer, n_filters, hype_space, force_ksize=None):
     """Basic convolution layer, parametrized by the hype_space."""
-    k = hype_space['conv_kernel_size']
+    if force_ksize is not None:
+        k = force_ksize
+    else:
+        k = hype_space['conv_kernel_size']
     return keras.layers.convolutional.Conv2D(
         filters=n_filters, kernel_size=(k, k), strides=(1, 1),
-        padding='same', activation='relu',
+        padding='same', activation=hype_space['activation'],
         kernel_regularizer=keras.regularizers.l2(
             STARTING_L2_REG * hype_space['l2_weight_reg_mult'])
     )(prev_layer)
@@ -253,7 +260,7 @@ def convolution(prev_layer, n_filters, hype_space):
 def residual(prev_layer, n_filters, hype_space):
     """Some sort of residual layer, parametrized by the hype_space."""
     current_layer = prev_layer
-    for i in range(hype_space['residual']):
+    for i in range(int(round(hype_space['residual']))):
         lin_current_layer = keras.layers.core.Dense(
             units=n_filters,
             activation="linear"
@@ -275,12 +282,17 @@ def convolution_pooling(prev_layer, n_filters, hype_space):
 
     See: https://arxiv.org/pdf/1412.6806.pdf
     """
-    return keras.layers.convolutional.Conv2D(
+    current_layer = keras.layers.convolutional.Conv2D(
         filters=n_filters, kernel_size=(3, 3), strides=(2, 2),
-        padding='valid', activation='linear',
+        padding='same', activation='linear',
         kernel_regularizer=keras.regularizers.l2(
             STARTING_L2_REG * hype_space['l2_weight_reg_mult'])
     )(prev_layer)
+
+    if hype_space['use_BN']:
+        current_layer = bn(current_layer)
+
+    return current_layer
 
 
 def bn(prev_layer):
@@ -288,11 +300,16 @@ def bn(prev_layer):
     return keras.layers.normalization.BatchNormalization()(prev_layer)
 
 
-def dropout(prev_layer, hype_space):
+def dropout(prev_layer, hype_space, for_convolution_else_fc=True):
     """Add dropout after a layer."""
-    return keras.layers.core.Dropout(
-        rate=hype_space['dropout_drop_proba']
-    )(prev_layer)
+    if for_convolution_else_fc:
+        return keras.layers.core.Dropout(
+            rate=hype_space['conv_dropout_drop_proba']
+        )(prev_layer)
+    else:
+        return keras.layers.core.Dropout(
+            rate=hype_space['fc_dropout_drop_proba']
+        )(prev_layer)
 
 
 def random_image_mirror_left_right(input_layer):
@@ -306,3 +323,53 @@ def random_image_mirror_left_right(input_layer):
         lambda img: tf.image.random_flip_left_right(img), batch_imgs
     )
     )(input_layer)
+
+
+def auto_choose_pooling(prev_layer, n_filters, hype_space):
+    """Deal with pooling in convolution steps."""
+    if hype_space['pooling_type'] == 'all_conv':
+        current_layer = convolution_pooling(
+            prev_layer, n_filters, hype_space)
+
+    elif hype_space['pooling_type'] == 'inception':
+        current_layer = inception_reduction(prev_layer, n_filters, hype_space)
+
+    elif hype_space['pooling_type'] == 'avg':
+        current_layer = keras.layers.pooling.AveragePooling2D(
+            pool_size=(2, 2)
+        )(prev_layer)
+
+    else:  # 'max'
+        current_layer = keras.layers.pooling.MaxPooling2D(
+            pool_size=(2, 2)
+        )(prev_layer)
+
+    return current_layer
+
+
+# def convolution(prev_layer, n_filters, hype_space, force_ksize=None)
+# def convolution_pooling(prev_layer, n_filters, hype_space)
+
+def inception_reduction(prev_layer, n_filters, hype_space):
+    """Reduction block, vaguely inspired from inception.
+
+    See: https://arxiv.org/pdf/1602.07261.pdf
+    """
+    n_filters_a = int(n_filters * 0.3 + 1)
+    n_filters = int(n_filters * 0.4 + 1)
+
+    conv1 = convolution(prev_layer, n_filters_a, hype_space, force_ksize=3)
+    conv1 = convolution_pooling(prev_layer, n_filters, hype_space)
+
+    conv2 = convolution(prev_layer, n_filters_a, hype_space, 1)
+    conv2 = convolution(conv2, n_filters, hype_space, 3)
+    conv2 = convolution_pooling(conv2, n_filters, hype_space)
+
+    conv3 = convolution(prev_layer, n_filters, hype_space, force_ksize=1)
+    conv3 = keras.layers.pooling.MaxPooling2D(
+        pool_size=(3, 3), strides=(2, 2), padding='same'
+    )(conv3)
+
+    current_layer = keras.layers.concatenate([conv1, conv2, conv3], axis=-1)
+
+    return current_layer

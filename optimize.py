@@ -1,7 +1,6 @@
 
 """Auto-optimizing a neural network with Hyperopt (TPE algorithm)."""
 
-
 from neural_net import build_and_optimize_cnn, build_model
 
 from keras.utils import plot_model
@@ -23,54 +22,79 @@ space = {
     # a linear fashion, to handle his exponentialy varying nature:
     'lr_rate_mult': hp.loguniform('lr_rate_mult', -0.5, 0.5),
     # L2 weight decay:
-    'l2_weight_reg_mult': hp.loguniform('l2_weight_reg_mult', -2.5, 2.5),
+    'l2_weight_reg_mult': hp.loguniform('l2_weight_reg_mult', -1.3, 1.3),
+    # Batch size fed for each gradient update
+    'batch_size': hp.quniform('batch_size', 100, 700, 5),
     # Choice of optimizer:
     'optimizer': hp.choice('optimizer', ['Adam', 'Nadam', 'RMSprop']),
-    # Uniform distribution in finding appropriate dropout values
-    'dropout_drop_proba': hp.uniform('dropout_drop_proba', 0.0, 0.25),
+    # Coarse labels importance for weights updates:
+    'coarse_labels_weight': hp.uniform('coarse_labels_weight', 0.01, 0.8),
+    # Uniform distribution in finding appropriate dropout values, conv layers
+    'conv_dropout_drop_proba': hp.uniform('conv_dropout_proba', 0.0, 0.35),
+    # Uniform distribution in finding appropriate dropout values, FC layers
+    'fc_dropout_drop_proba': hp.uniform('fc_dropout_proba', 0.0, 0.6),
     # Use batch normalisation at more places?
     'use_BN': hp.choice('use_BN', [False, True]),
 
-    # Use a first convolution of 4x4?
-    'use_first_4x4': hp.choice('use_first_4x4', [False, True]),
+    # Use a first convolution which is special?
+    'first_conv': hp.choice(
+        'first_conv', [None, hp.choice('first_conv_size', [3, 4])]
+    ),
     # Use residual connections? If so, how many more to stack?
     'residual': hp.choice(
-        'residual', [None, hp.choice(
-            'residual_units', [1, 2, 3]
-        )]
+        'residual', [None, hp.quniform(
+            'residual_units', 1 - 0.499, 4 + 0.499, 1)]
     ),
     # Let's multiply the "default" number of hidden units:
-    'hidden_units_mult': hp.loguniform('hidden_units_mult', -0.5, 0.5),
+    'conv_hiddn_units_mult': hp.loguniform('conv_hiddn_units_mult', -0.6, 0.6),
     # Number of conv+pool layers stacked:
     'nb_conv_pool_layers': hp.choice('nb_conv_pool_layers', [2, 3]),
-    # Use all-conlolutional pooling (stride 2), or else max pooling:
-    'use_allconv_pooling': hp.choice('use_allconv_pooling', [False, True]),
+    # The type of pooling used at each subsampling step:
+    'pooling_type': hp.choice('pooling_type', [
+        'max',  # Max pooling
+        'avg',  # Average pooling
+        'all_conv',  # All-convolutionnal: https://arxiv.org/pdf/1412.6806.pdf
+        'inception'  # Inspired from: https://arxiv.org/pdf/1602.07261.pdf
+    ]),
     # The kernel_size for convolutions:
     'conv_kernel_size': hp.choice('conv_kernel_size', [2, 3]),
 
     # Amount of fully-connected units after convolution feature map
-    'fc_units_mult': hp.loguniform('fc_units_1_mult', -0.5, 0.5),
+    'fc_units_1_mult': hp.loguniform('fc_units_1_mult', -0.6, 0.6),
+    # Use one more FC layer at output
+    'one_more_fc': hp.choice(
+        'one_more_fc', [None, hp.loguniform('fc_units_2_mult', -0.6, 0.6)]
+    ),
+    # Activations that are used everywhere
+    'activation': hp.choice('activation', ['relu', 'elu'])
 }
 
 
 def plot_average_model():
     """Plot a demo model."""
-    space_normal_demo_to_plot = {
+    space_base_demo_to_plot = {
         'lr_rate_mult': 1.0,
         'l2_weight_reg_mult': 1.0,
-        'optimizer': 'Adam',
-        'dropout_drop_proba': 0.0,
+        'batch_size': 300,
+        'optimizer': 'Nadam',
+        'coarse_labels_weight': 0.2,
+        'conv_dropout_drop_proba': 0.175,
+        'fc_dropout_drop_proba': 0.3,
         'use_BN': True,
-        'use_first_4x4': True,
-        'residual': 3,
-        'hidden_units_mult': 1.0,
+
+        'first_conv': 4,
+        'residual': 4,
+        'conv_hiddn_units_mult': 1.0,
         'nb_conv_pool_layers': 3,
-        'use_allconv_pooling': False,
+        'pooling_type': 'inception',
         'conv_kernel_size': 3,
-        'fc_units_mult': 1.0,
+
+        'fc_units_1_mult': 1.0,
+        'one_more_fc': 1.0,
+        'activation': 'elu'
     }
 
-    model = build_model(space_normal_demo_to_plot)
+    model = build_model(space_base_demo_to_plot)
     plot_model(model, to_file='model_demo.png', show_shapes=True)
     print("Saved model visualization to model_demo.png.")
 
@@ -105,8 +129,9 @@ def run_a_trial():
     pickle.dump(trials, open("results.pkl", "wb"))
 
     print("\nOPTIMIZATION STEP COMPLETE.\n")
-    print("Best results yet (note that this is calculated on the 'loss' "
-          "metric, so L2 weight decay might end a bit ignore by hyperopt):")
+    print("Best results yet (note that this is NOT calculated on the 'loss' "
+          "metric despite the key is 'loss' - we rather take the negative "
+          "best accuracy throughout learning as a metric to minimize):")
     print(best)
 
 
