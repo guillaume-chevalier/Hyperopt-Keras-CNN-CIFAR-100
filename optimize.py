@@ -28,7 +28,7 @@ space = {
     # Choice of optimizer:
     'optimizer': hp.choice('optimizer', ['Adam', 'Nadam', 'RMSprop']),
     # Coarse labels importance for weights updates:
-    'coarse_labels_weight': hp.uniform('coarse_labels_weight', 0.01, 0.8),
+    'coarse_labels_weight': hp.uniform('coarse_labels_weight', 0.1, 0.7),
     # Uniform distribution in finding appropriate dropout values, conv layers
     'conv_dropout_drop_proba': hp.uniform('conv_dropout_proba', 0.0, 0.35),
     # Uniform distribution in finding appropriate dropout values, FC layers
@@ -49,6 +49,8 @@ space = {
     'conv_hiddn_units_mult': hp.loguniform('conv_hiddn_units_mult', -0.6, 0.6),
     # Number of conv+pool layers stacked:
     'nb_conv_pool_layers': hp.choice('nb_conv_pool_layers', [2, 3]),
+    # Starting conv+pool layer for residual connections:
+    'conv_pool_res_start_idx': hp.quniform('conv_pool_res_start_idx', 0, 2, 1),
     # The type of pooling used at each subsampling step:
     'pooling_type': hp.choice('pooling_type', [
         'max',  # Max pooling
@@ -57,7 +59,9 @@ space = {
         'inception'  # Inspired from: https://arxiv.org/pdf/1602.07261.pdf
     ]),
     # The kernel_size for convolutions:
-    'conv_kernel_size': hp.choice('conv_kernel_size', [2, 3]),
+    'conv_kernel_size': hp.quniform('conv_kernel_size', 2, 4, 1),
+    # The kernel_size for residual convolutions:
+    'res_conv_kernel_size': hp.quniform('res_conv_kernel_size', 2, 4, 1),
 
     # Amount of fully-connected units after convolution feature map
     'fc_units_1_mult': hp.loguniform('fc_units_1_mult', -0.6, 0.6),
@@ -86,8 +90,10 @@ def plot_average_model():
         'residual': 4,
         'conv_hiddn_units_mult': 1.0,
         'nb_conv_pool_layers': 3,
+        'conv_pool_res_start_idx': 0.0,
         'pooling_type': 'inception',
-        'conv_kernel_size': 3,
+        'conv_kernel_size': 3.0,
+        'res_conv_kernel_size': 3.0,
 
         'fc_units_1_mult': 1.0,
         'one_more_fc': 1.0,

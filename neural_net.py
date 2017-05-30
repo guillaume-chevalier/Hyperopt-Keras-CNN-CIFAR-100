@@ -40,7 +40,7 @@ y_test_coarse = keras.utils.to_categorical(y_test_coarse, NB_CLASSES_COARSE)
 
 # You may want to reduce this considerably if you don't have a killer GPU:
 EPOCHS = 100
-STARTING_L2_REG = 0.0005
+STARTING_L2_REG = 0.0007
 
 optimizer_str_to_class = {
     'Adam': Adam,
@@ -171,7 +171,8 @@ def build_model(hype_space):
             current_layer = bn(current_layer)
         print(current_layer._keras_shape)
 
-        if i > 0 and hype_space['residual'] is not None:
+        deep_enough_for_res = hype_space['conv_pool_res_start_idx']
+        if i >= deep_enough_for_res and hype_space['residual'] is not None:
             current_layer = residual(current_layer, n_filters, hype_space)
             print(current_layer._keras_shape)
 
@@ -188,7 +189,7 @@ def build_model(hype_space):
     print(current_layer._keras_shape)
 
     current_layer = keras.layers.core.Dense(
-        units=int(700 * hype_space['fc_units_1_mult']),
+        units=int(1000 * hype_space['fc_units_1_mult']),
         activation=hype_space['activation'],
         kernel_regularizer=keras.regularizers.l2(
             STARTING_L2_REG * hype_space['l2_weight_reg_mult'])
@@ -200,7 +201,7 @@ def build_model(hype_space):
 
     if hype_space['one_more_fc'] is not None:
         current_layer = keras.layers.core.Dense(
-            units=int(550 * hype_space['one_more_fc']),
+            units=int(750 * hype_space['one_more_fc']),
             activation=hype_space['activation'],
             kernel_regularizer=keras.regularizers.l2(
                 STARTING_L2_REG * hype_space['l2_weight_reg_mult'])
@@ -243,56 +244,17 @@ def build_model(hype_space):
     return model
 
 
-def convolution(prev_layer, n_filters, hype_space, force_ksize=None):
-    """Basic convolution layer, parametrized by the hype_space."""
-    if force_ksize is not None:
-        k = force_ksize
-    else:
-        k = hype_space['conv_kernel_size']
-    return keras.layers.convolutional.Conv2D(
-        filters=n_filters, kernel_size=(k, k), strides=(1, 1),
-        padding='same', activation=hype_space['activation'],
-        kernel_regularizer=keras.regularizers.l2(
-            STARTING_L2_REG * hype_space['l2_weight_reg_mult'])
-    )(prev_layer)
-
-
-def residual(prev_layer, n_filters, hype_space):
-    """Some sort of residual layer, parametrized by the hype_space."""
-    current_layer = prev_layer
-    for i in range(int(round(hype_space['residual']))):
-        lin_current_layer = keras.layers.core.Dense(
-            units=n_filters,
-            activation="linear"
-        )(current_layer)
-
-        layer_to_add = dropout(current_layer, hype_space)
-        layer_to_add = convolution(layer_to_add, n_filters, hype_space)
-
-        current_layer = keras.layers.add([
-            lin_current_layer,
-            layer_to_add
-        ])
-    return bn(current_layer)
-
-
-def convolution_pooling(prev_layer, n_filters, hype_space):
+def random_image_mirror_left_right(input_layer):
     """
-    Pooling with a convolution of stride 2.
+    Flip each image left-right like in a mirror, randomly, even at test-time.
 
-    See: https://arxiv.org/pdf/1412.6806.pdf
+    This acts as a data augmentation technique. See:
+    https://stackoverflow.com/questions/39574999/tensorflow-tf-image-functions-on-an-image-batch
     """
-    current_layer = keras.layers.convolutional.Conv2D(
-        filters=n_filters, kernel_size=(3, 3), strides=(2, 2),
-        padding='same', activation='linear',
-        kernel_regularizer=keras.regularizers.l2(
-            STARTING_L2_REG * hype_space['l2_weight_reg_mult'])
-    )(prev_layer)
-
-    if hype_space['use_BN']:
-        current_layer = bn(current_layer)
-
-    return current_layer
+    return keras.layers.core.Lambda(function=lambda batch_imgs: tf.map_fn(
+        lambda img: tf.image.random_flip_left_right(img), batch_imgs
+    )
+    )(input_layer)
 
 
 def bn(prev_layer):
@@ -312,17 +274,46 @@ def dropout(prev_layer, hype_space, for_convolution_else_fc=True):
         )(prev_layer)
 
 
-def random_image_mirror_left_right(input_layer):
-    """
-    Flip each image left-right like in a mirror, randomly, even at test-time.
+def convolution(prev_layer, n_filters, hype_space, force_ksize=None):
+    """Basic convolution layer, parametrized by the hype_space."""
+    if force_ksize is not None:
+        k = force_ksize
+    else:
+        k = int(round(hype_space['conv_kernel_size']))
+    return keras.layers.convolutional.Conv2D(
+        filters=n_filters, kernel_size=(k, k), strides=(1, 1),
+        padding='same', activation=hype_space['activation'],
+        kernel_regularizer=keras.regularizers.l2(
+            STARTING_L2_REG * hype_space['l2_weight_reg_mult'])
+    )(prev_layer)
 
-    This acts as a data augmentation technique. See:
-    https://stackoverflow.com/questions/39574999/tensorflow-tf-image-functions-on-an-image-batch
-    """
-    return keras.layers.core.Lambda(function=lambda batch_imgs: tf.map_fn(
-        lambda img: tf.image.random_flip_left_right(img), batch_imgs
-    )
-    )(input_layer)
+
+def residual(prev_layer, n_filters, hype_space):
+    """Some sort of residual layer, parametrized by the hype_space."""
+    current_layer = prev_layer
+    for i in range(int(round(hype_space['residual']))):
+        lin_current_layer = keras.layers.convolutional.Conv2D(
+            filters=n_filters, kernel_size=(1, 1), strides=(1, 1),
+            padding='same', activation='linear',
+            kernel_regularizer=keras.regularizers.l2(
+                STARTING_L2_REG * hype_space['l2_weight_reg_mult'])
+        )(current_layer)
+
+        layer_to_add = dropout(current_layer, hype_space)
+        layer_to_add = convolution(
+            layer_to_add, n_filters, hype_space,
+            force_ksize=int(round(hype_space['res_conv_kernel_size'])))
+
+        current_layer = keras.layers.add([
+            lin_current_layer,
+            layer_to_add
+        ])
+        if hype_space['use_BN']:
+            current_layer = bn(current_layer)
+    if not hype_space['use_BN']:
+        current_layer = bn(current_layer)
+
+    return bn(current_layer)
 
 
 def auto_choose_pooling(prev_layer, n_filters, hype_space):
@@ -347,15 +338,32 @@ def auto_choose_pooling(prev_layer, n_filters, hype_space):
     return current_layer
 
 
-# def convolution(prev_layer, n_filters, hype_space, force_ksize=None)
-# def convolution_pooling(prev_layer, n_filters, hype_space)
+def convolution_pooling(prev_layer, n_filters, hype_space):
+    """
+    Pooling with a convolution of stride 2.
+
+    See: https://arxiv.org/pdf/1412.6806.pdf
+    """
+    current_layer = keras.layers.convolutional.Conv2D(
+        filters=n_filters, kernel_size=(3, 3), strides=(2, 2),
+        padding='same', activation='linear',
+        kernel_regularizer=keras.regularizers.l2(
+            STARTING_L2_REG * hype_space['l2_weight_reg_mult'])
+    )(prev_layer)
+
+    if hype_space['use_BN']:
+        current_layer = bn(current_layer)
+
+    return current_layer
+
 
 def inception_reduction(prev_layer, n_filters, hype_space):
-    """Reduction block, vaguely inspired from inception.
+    """
+    Reduction block, vaguely inspired from inception.
 
     See: https://arxiv.org/pdf/1602.07261.pdf
     """
-    n_filters_a = int(n_filters * 0.3 + 1)
+    n_filters_a = int(n_filters * 0.33 + 1)
     n_filters = int(n_filters * 0.4 + 1)
 
     conv1 = convolution(prev_layer, n_filters_a, hype_space, force_ksize=3)
