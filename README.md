@@ -98,9 +98,58 @@ space_base_demo_to_plot = {
     'activation': 'elu'
 }
 
-
 ```
 
 <p align="center">
   <img src="model_demo.png">
+</p>
+
+## Results
+
+The best model is this one: `results/model_0.676100010872_6066e.txt.json`.
+
+The final accuracy is of 67.61% in average on the 100 fine labels, and is of 77.31% in average on the 20 coarse labels. 
+My results are comparable to the ones in the middle of [that list](http://rodrigob.github.io/are_we_there_yet/build/classification_datasets_results.html#43494641522d313030), under the CIFAR-100 section. The only image preprocessing that I do is a random flip left-right.
+
+```
+{
+    "coarse_best_accuracy": 0.7731000242233277,
+    "coarse_best_loss": 0.8012041954994201,
+    "coarse_end_accuracy": 0.7565,
+    "coarse_end_loss": 0.9019438380718231,
+    "fine_best_accuracy": 0.6761000108718872,
+    "fine_best_loss": 1.3936876878738402,
+    "fine_end_accuracy": 0.6549,
+    "fine_end_loss": 1.539645684337616,
+    "history": {...},
+    "loss": -0.6761000108718872,
+    "model_name": "model_0.676100010872_6066e",
+    "real_loss": 3.018656848526001,
+    "space": {
+        "activation": "elu",
+        "batch_size": 320.0,
+        "coarse_labels_weight": 0.3067103474295116,
+        "conv_dropout_drop_proba": 0.25923531175521264,
+        "conv_hiddn_units_mult": 1.5958302613876916,
+        "conv_kernel_size": 3.0,
+        "conv_pool_res_start_idx": 0.0,
+        "fc_dropout_drop_proba": 0.4322253354921089,
+        "fc_units_1_mult": 1.3083964454436132,
+        "first_conv": 3,
+        "l2_weight_reg_mult": 0.41206755600055983,
+        "lr_rate_mult": 0.6549347353077412,
+        "nb_conv_pool_layers": 3,
+        "one_more_fc": null,
+        "optimizer": "Nadam",
+        "pooling_type": "avg",
+        "res_conv_kernel_size": 2.0,
+        "residual": 3.0,
+        "use_BN": true
+    },
+    "status": "ok"
+}
+```
+
+<p align="center">
+  <img src="model_best.png">
 </p>

@@ -24,7 +24,7 @@ space = {
     # L2 weight decay:
     'l2_weight_reg_mult': hp.loguniform('l2_weight_reg_mult', -1.3, 1.3),
     # Batch size fed for each gradient update
-    'batch_size': hp.quniform('batch_size', 100, 700, 5),
+    'batch_size': hp.quniform('batch_size', 100, 450, 5),
     # Choice of optimizer:
     'optimizer': hp.choice('optimizer', ['Adam', 'Nadam', 'RMSprop']),
     # Coarse labels importance for weights updates:
@@ -74,7 +74,7 @@ space = {
 }
 
 
-def plot_average_model():
+def plot_base_and_best_models():
     """Plot a demo model."""
     space_base_demo_to_plot = {
         'lr_rate_mult': 1.0,
@@ -99,11 +99,37 @@ def plot_average_model():
         'one_more_fc': 1.0,
         'activation': 'elu'
     }
+    space_best_model = {
+        "activation": "elu",
+        "batch_size": 320.0,
+        "coarse_labels_weight": 0.3067103474295116,
+        "conv_dropout_drop_proba": 0.25923531175521264,
+        "conv_hiddn_units_mult": 1.5958302613876916,
+        "conv_kernel_size": 3.0,
+        "conv_pool_res_start_idx": 0.0,
+        "fc_dropout_drop_proba": 0.4322253354921089,
+        "fc_units_1_mult": 1.3083964454436132,
+        "first_conv": 3,
+        "l2_weight_reg_mult": 0.41206755600055983,
+        "lr_rate_mult": 0.6549347353077412,
+        "nb_conv_pool_layers": 3,
+        "one_more_fc": None,
+        "optimizer": "Nadam",
+        "pooling_type": "avg",
+        "res_conv_kernel_size": 2.0,
+        "residual": 3.0,
+        "use_BN": True
+    }
 
     model = build_model(space_base_demo_to_plot)
     plot_model(model, to_file='model_demo.png', show_shapes=True)
-    print("Saved model visualization to model_demo.png.")
+    print("Saved base model visualization to model_demo.png.")
+    K.clear_session()
+    del model
 
+    model = build_model(space_best_model)
+    plot_model(model, to_file='model_best.png', show_shapes=True)
+    print("Saved best model visualization to model_best.png.")
     K.clear_session()
     del model
 
@@ -145,9 +171,10 @@ if __name__ == "__main__":
     """Plot the model and run the optimisation forever (and saves results)."""
 
     print("Plot a demo model that would represent "
-          "a quite normal model (or a bit more huge).")
+          "a quite normal model (or a bit more huge), "
+          "and then the best model.")
 
-    plot_average_model()
+    plot_base_and_best_models()
 
     print("Here we train many models, one after the other. "
           "Note that hyperopt has support for cloud "
