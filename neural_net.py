@@ -19,7 +19,7 @@ import os
 
 __author__ = "Guillaume Chevalier"
 __copyright__ = "Copyright 2017, Guillaume Chevalier"
-__license__ = "Apache License 2.0"
+__license__ = "MIT License"
 
 
 NB_CHANNELS = 3
