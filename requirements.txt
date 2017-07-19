@@ -1,6 +1,7 @@
-numpy==1.12.1
+numpy==1.13.1
 hyperopt==0.1
-tensorflow==1.0.0
-Keras==2.0.2
+tensorflow==1.2.1
+Keras==2.0.6
 pydot==1.2.3
 pydot-ng==1.0.0
+scipy==0.19.1

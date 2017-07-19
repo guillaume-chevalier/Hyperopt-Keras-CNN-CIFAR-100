@@ -103,7 +103,6 @@ ENV/
 # "screen -L" logs
 screenlog*
 
-# User-ignored files and folders that were _renamed:
+# User-ignored files and folders:
 _*
-
-
+rsub*

@@ -1,18 +1,16 @@
 
 """Convolutional neural network built with Keras."""
 
+from utils import print_json
 
 import keras
-# from keras.datasets import cifar10
-from keras.datasets import cifar100
-import keras.backend as K
+from keras.datasets import cifar100  # from keras.datasets import cifar10
+from keras.layers.core import K  # import keras.backend as K
 from keras.optimizers import Adam, Nadam, RMSprop
 import tensorflow as tf
 from hyperopt import STATUS_OK, STATUS_FAIL
 
 import uuid
-from bson import json_util
-import json
 import traceback
 import os
 
@@ -20,6 +18,14 @@ import os
 __author__ = "Guillaume Chevalier"
 __copyright__ = "Copyright 2017, Guillaume Chevalier"
 __license__ = "MIT License"
+__notice__ = (
+    "Some further edits by Guillaume Chevalier are made on "
+    "behalf of Vooban Inc. and belongs to Vooban Inc. ")
+# See: https://github.com/Vooban/Hyperopt-Keras-CNN-CIFAR-100/blob/master/LICENSE"
+
+
+TENSORBOARD_DIR = "TensorBoard/"
+WEIGHTS_DIR = "weights/"
 
 
 NB_CHANNELS = 3
@@ -42,106 +48,130 @@ y_test_coarse = keras.utils.to_categorical(y_test_coarse, NB_CLASSES_COARSE)
 EPOCHS = 100
 STARTING_L2_REG = 0.0007
 
-optimizer_str_to_class = {
+OPTIMIZER_STR_TO_CLASS = {
     'Adam': Adam,
     'Nadam': Nadam,
     'RMSprop': RMSprop
 }
 
 
-def build_and_optimize_cnn(hype_space):
-    """Build a convolutional neural network and train it."""
-    try:
-        K.set_image_data_format('channels_last')
-        model = build_model(hype_space)
+def build_and_train(hype_space, save_best_weights=False, log_for_tensorboard=False):
+    """Build the deep CNN model and train it."""
+    K.set_learning_phase(1)
+    K.set_image_data_format('channels_last')
 
-        history = model.fit(
-            [x_train],
-            [y_train, y_train_c],
-            batch_size=int(hype_space['batch_size']),
-            epochs=EPOCHS,
-            shuffle=True,
-            verbose=1,
-            validation_data=([x_test], [y_test, y_test_coarse])
-        ).history
+    # if log_for_tensorboard:
+    #     # We need a smaller batch size to not blow memory with tensorboard
+    #     hype_space["lr_rate_mult"] = hype_space["lr_rate_mult"] / 10.0
+    #     hype_space["batch_size"] = hype_space["batch_size"] / 10.0
 
-        score = model.evaluate([x_test], [y_test, y_test_coarse], verbose=0)
+    model = build_model(hype_space)
 
-        max_acc = max(history['val_fine_outputs_acc'])
+    # K.set_learning_phase(1)
 
-        model_name = "model_{}_{}".format(str(max_acc), str(uuid.uuid4())[:5])
-        print("Model name: {}".format(model_name))
+    model_uuid = str(uuid.uuid4())[:5]
 
-        # Note: to restore the model, you'll need to have a keras callback to
-        # save the best weights and not the final weights. Only the results are
-        # saved.
-        print(history.keys())
-        print(history)
-        print(score)
-        results = {
-            # We plug "-val_fine_outputs_acc" as a
-            # minimizing metric named 'loss' by Hyperopt.
-            'loss': -max_acc,
-            'real_loss': score[0],
-            # Fine stats:
-            'fine_best_loss': min(history['val_fine_outputs_loss']),
-            'fine_best_accuracy': max(history['val_fine_outputs_acc']),
-            'fine_end_loss': score[1],
-            'fine_end_accuracy': score[3],
-            # Coarse stats:
-            'coarse_best_loss': min(history['val_coarse_outputs_loss']),
-            'coarse_best_accuracy': max(history['val_coarse_outputs_acc']),
-            'coarse_end_loss': score[2],
-            'coarse_end_accuracy': score[4],
-            # Misc:
-            'model_name': model_name,
-            'space': hype_space,
-            'history': history,
-            'status': STATUS_OK
-        }
+    callbacks = []
 
-        print("RESULTS:")
-        print(json.dumps(
-            results,
-            default=json_util.default, sort_keys=True,
-            indent=4, separators=(',', ': ')
-        ))
-        # Save all training results to disks with unique filenames
-        if not os.path.exists("results/"):
-            os.makedirs("results/")
-        with open('results/{}.txt.json'.format(model_name), 'w') as f:
-            json.dump(
-                results, f,
-                default=json_util.default, sort_keys=True,
-                indent=4, separators=(',', ': ')
-            )
+    # Weight saving callback:
+    if save_best_weights:
+        weights_save_path = os.path.join(
+            WEIGHTS_DIR, '{}.hdf5'.format(model_uuid))
+        print("Model's weights will be saved to: {}".format(weights_save_path))
+        if not os.path.exists(WEIGHTS_DIR):
+            os.makedirs(WEIGHTS_DIR)
 
-        K.clear_session()
-        del model
+        callbacks.append(keras.callbacks.ModelCheckpoint(
+            weights_save_path,
+            monitor='val_fine_outputs_acc',
+            save_best_only=True, mode='max'))
 
-        return results
+    # TensorBoard logging callback:
+    log_path = None
+    if log_for_tensorboard:
+        log_path = os.path.join(TENSORBOARD_DIR, model_uuid)
+        print("Tensorboard log files will be saved to: {}".format(log_path))
+        if not os.path.exists(log_path):
+            os.makedirs(log_path)
 
-    except Exception as err:
-        try:
-            K.clear_session()
-        except:
-            pass
-        err_str = str(err)
-        print(err_str)
-        traceback_str = str(traceback.format_exc())
-        print(traceback_str)
-        return {
-            'status': STATUS_FAIL,
-            'err': err_str,
-            'traceback': traceback_str
-        }
+        # Right now Keras's TensorBoard callback and TensorBoard itself are not
+        # properly documented so we do not save embeddings (e.g.: for T-SNE).
 
-    print("\n\n")
+        # embeddings_metadata = {
+        #     # Dense layers only:
+        #     l.name: "../10000_test_classes_labels_on_1_row_in_plain_text.tsv"
+        #     for l in model.layers if 'dense' in l.name.lower()
+        # }
+
+        tb_callback = keras.callbacks.TensorBoard(
+            log_dir=log_path,
+            histogram_freq=2,
+            # write_images=True, # Enabling this line would require more than 5 GB at each `histogram_freq` epoch.
+            write_graph=True
+            # embeddings_freq=3,
+            # embeddings_layer_names=list(embeddings_metadata.keys()),
+            # embeddings_metadata=embeddings_metadata
+        )
+        tb_callback.set_model(model)
+        callbacks.append(tb_callback)
+
+    # Train net:
+    history = model.fit(
+        [x_train],
+        [y_train, y_train_c],
+        batch_size=int(hype_space['batch_size']),
+        epochs=EPOCHS,
+        shuffle=True,
+        verbose=1,
+        callbacks=callbacks,
+        validation_data=([x_test], [y_test, y_test_coarse])
+    ).history
+
+    # Test net:
+    K.set_learning_phase(0)
+    score = model.evaluate([x_test], [y_test, y_test_coarse], verbose=0)
+    max_acc = max(history['val_fine_outputs_acc'])
+
+    model_name = "model_{}_{}".format(str(max_acc), str(uuid.uuid4())[:5])
+    print("Model name: {}".format(model_name))
+
+    # Note: to restore the model, you'll need to have a keras callback to
+    # save the best weights and not the final weights. Only the result is
+    # saved.
+    print(history.keys())
+    print(history)
+    print(score)
+    result = {
+        # We plug "-val_fine_outputs_acc" as a
+        # minimizing metric named 'loss' by Hyperopt.
+        'loss': -max_acc,
+        'real_loss': score[0],
+        # Fine stats:
+        'fine_best_loss': min(history['val_fine_outputs_loss']),
+        'fine_best_accuracy': max(history['val_fine_outputs_acc']),
+        'fine_end_loss': score[1],
+        'fine_end_accuracy': score[3],
+        # Coarse stats:
+        'coarse_best_loss': min(history['val_coarse_outputs_loss']),
+        'coarse_best_accuracy': max(history['val_coarse_outputs_acc']),
+        'coarse_end_loss': score[2],
+        'coarse_end_accuracy': score[4],
+        # Misc:
+        'model_name': model_name,
+        'space': hype_space,
+        'history': history,
+        'status': STATUS_OK
+    }
+
+    print("RESULT:")
+    print_json(result)
+
+    return model, model_name, result, log_path
 
 
 def build_model(hype_space):
     """Create model according to the hyperparameter space given."""
-    print("Current space being optimized:")
+    print("Hyperspace:")
     print(hype_space)
 
     input_layer = keras.layers.Input(
@@ -234,7 +264,7 @@ def build_model(hype_space):
         outputs=[fine_outputs, coarse_outputs]
     )
     model.compile(
-        optimizer=optimizer_str_to_class[hype_space['optimizer']](
+        optimizer=OPTIMIZER_STR_TO_CLASS[hype_space['optimizer']](
             lr=0.001 * hype_space['lr_rate_mult']
         ),
         loss='categorical_crossentropy',

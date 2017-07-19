@@ -20,7 +20,12 @@ LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM,
 OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
 SOFTWARE.
 
-NOTICE: this MIT License is a sublicense on top of the previous work and the
+NOTICE: This MIT License is a sublicense on top of the previous work and the
 previous MIT License of Guillaume Chevalier, which can be found here: 
 https://github.com/guillaume-chevalier/Hyperopt-Keras-CNN-CIFAR-100/blob/master/LICENSE
+and here:
+https://github.com/guillaume-chevalier/python-caffe-custom-cifar-100-conv-net
 
+NOTICE: Code from François Chollet is also used (and edited) in the file
+conv_filter_visualization.py to generate images in the folder "layers/". 
+More information about this sublicense can be seen in that python ".py" file. 
