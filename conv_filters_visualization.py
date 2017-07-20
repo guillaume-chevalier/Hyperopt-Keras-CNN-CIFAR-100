@@ -67,7 +67,7 @@ import os
 # Dimensions of the generated pictures for each filter.
 img_width = 32
 img_height = 32
-weight_file = "{}/e2fe5.hdf5".format(WEIGHTS_DIR)
+weight_file = "{}/f37d5.hdf5".format(WEIGHTS_DIR)
 LAYERS_DIR = "layers"
 
 # Load model in test phase mode: no dropout, and use fixed BN
