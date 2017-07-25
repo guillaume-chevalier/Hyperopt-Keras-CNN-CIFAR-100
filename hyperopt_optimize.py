@@ -81,11 +81,15 @@ space = {
 }
 
 
-def plot(hyperspace):
+def plot(hyperspace, file_name_prefix):
     """Plot a model from it's hyperspace."""
     model = build_model(hyperspace)
-    plot_model(model, to_file='model_demo.png', show_shapes=True)
-    print("Saved base model visualization to model_demo.png.")
+    plot_model(
+        model,
+        to_file='{}.png'.format(file_name_prefix),
+        show_shapes=True
+    )
+    print("Saved model visualization to {}.png.".format(file_name_prefix))
     K.clear_session()
     del model
 
@@ -115,7 +119,7 @@ def plot_base_model():
         'one_more_fc': 1.0,
         'activation': 'elu'
     }
-    plot(space_base_demo_to_plot)
+    plot(space_base_demo_to_plot, "model_demo")
 
 
 def plot_best_model():
@@ -127,7 +131,7 @@ def plot_best_model():
 
     print("Best hyperspace yet:")
     print_json(space_best_model)
-    plot(space_best_model)
+    plot(space_best_model, "model_best")
 
 
 def optimize_cnn(hype_space):
