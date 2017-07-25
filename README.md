@@ -11,19 +11,19 @@ First off, to learn how hyperopt works and what it is for, read the [hyperopt tu
 
 ## Meta-optimize the neural network with Hyperopt
 
-To run the hyperparameter search vy yourself, do: `python3 hyperopt_optimize.py`. You might want to look at `requirements.py` and install some of them manually to acquire GPU acceleration (e.g.: installing TensorFlow and Keras especially by yourself). 
+To run the hyperparameter search vy yourself, do: `python3 hyperopt_optimize.py`. You might want to look at `requirements.py` and install some of them manually to acquire GPU acceleration (e.g.: installing TensorFlow and Keras especially by yourself).
 
-Optimization results will continuously be saved in the `results/` folder (sort files to take best result as human-readable text). 
-Also, the results are pickled to `results.pkl` to be able to resume the TPE meta-optimization process later simply by running the program again with `python3 hyperopt_optimize.py`. 
+Optimization results will continuously be saved in the `results/` folder (sort files to take best result as human-readable text).
+Also, the results are pickled to `results.pkl` to be able to resume the TPE meta-optimization process later simply by running the program again with `python3 hyperopt_optimize.py`.
 
-If you want to learn more about Hyperopt, you'll probably want to watch that [video](https://www.youtube.com/watch?v=Mp1xnPfE4PY) made by the creator of Hyperopt. Also, if you want to run the model on the CIFAR-10 dataset, you must edit the file `neural_net.py`. 
+If you want to learn more about Hyperopt, you'll probably want to watch that [video](https://www.youtube.com/watch?v=Mp1xnPfE4PY) made by the creator of Hyperopt. Also, if you want to run the model on the CIFAR-10 dataset, you must edit the file `neural_net.py`.
 
 It is possible that you get better results than there are already here. Pull requests / contributions are welcome. Suggestion: trying many different initializers for the layers would be an interesting thing to try. Adding SELU activations would be interesting too. To restart the training with new or removed hyperparameters, it is recommended to delete existing results with `./delete_results.sh`.
 
 
 ## The Deep Convolutional Neural Network Model
 
-Here is a basic overview of the model. I implemented it in such a way that Hyperopt will try to change the shape of the layers and remove or replace some of them according to some pre-parametrized ideas that I have got. Therefore, not only the learning rate is changed with hyperopt, but a lot more parameters. 
+Here is a basic overview of the model. I implemented it in such a way that Hyperopt will try to change the shape of the layers and remove or replace some of them according to some pre-parametrized ideas that I have got. Therefore, not only the learning rate is changed with hyperopt, but a lot more parameters.
 
 ```python
 
@@ -117,24 +117,25 @@ space_base_demo_to_plot = {
 
 ## Analysis of the hyperparameters
 
-Here is an [analysis of the results regarding the effect of every hyperparameters](https://github.com/Vooban/Hyperopt-Keras-CNN-CIFAR-100/blob/master/AnalyzeHyperoptResults.ipynb). Here is an excerpt: 
+Here is an [analysis of the results regarding the effect of every hyperparameters](https://github.com/Vooban/Hyperopt-Keras-CNN-CIFAR-100/blob/master/AnalyzeHyperoptResults.ipynb). Here is an excerpt:
 
 <p align="center">
   <img src="hyperparameters_scatter_matrix.png">
 </p>
 
-This could help to redefine the hyperparameters and to narrow them down successively, relaunching the meta-optimization on refined spaces. 
+This could help to redefine the hyperparameters and to narrow them down successively, relaunching the meta-optimization on refined spaces.
 
 
 ## Best result
 
 The best model is this one: `results/model_0.676100010872_6066e.txt.json`.
 
-The final accuracy is of 67.61% in average on the 100 fine labels, and is of 77.31% in average on the 20 coarse labels. 
+The final accuracy is of 67.61% in average on the 100 fine labels, and is of 77.31% in average on the 20 coarse labels.
 My results are comparable to the ones in the middle of [that list](http://rodrigob.github.io/are_we_there_yet/build/classification_datasets_results.html#43494641522d313030), under the CIFAR-100 section. The only image preprocessing that I do is a random flip left-right.
 
-### Best hyerspace found:
-```
+### Best hyperspace found:
+```python
+
 space_best_model = {
     "coarse_best_accuracy": 0.7731000242233277,
     "coarse_best_loss": 0.8012041954994201,
@@ -186,20 +187,36 @@ TensorBoard can be used to inspect the best result (or all results in case you r
 
 It is possible to run `python3 retrain_best_with_tensorboard.py` to retrain the model and save TensorBoard logs, as well as saving the weights at their best state during training for a potential reuse. The instructions to run TensorBoard will be printed in the console at the end of the retraining.
 
-Every training's TensorBoard log will be in a new folder under the "TensorBoard/" directory with an unique name (the model ID). 
+Every training's TensorBoard log will be in a new folder under the "TensorBoard/" directory with an unique name (the model ID).
 
-Here is the command to run tensorboard once located in the root directory of the project:
+Here is the command to run TensorBoard once located in the root directory of the project:
 
 ```
 tensorboard --logdir=TensorBoard/
 ```
 
+Just as an example, here is what can be seen in TensorBoard for the histograms related to the first convolutional layer, `conv2d_1`:
+
+<p align="center">
+  <img src="tensorboard_histogram_example.png">
+</p>
+
+It suggests that better weights and biases initialization schemes could be used.
+
+It is also possible to see in TensorBoard more statistics and things, such as the distribution tab, the graphs tab, and the the scalars tab. See printscreens of all the statistics available under the [TensorBoard/previews/](https://github.com/Vooban/Hyperopt-Keras-CNN-CIFAR-100/tree/master/TensorBoard/previews) folder of this project.
+
+
 ## Visualizing what activates certain filters
 
 We use the method of [gradient ascent in the input space](https://blog.keras.io/how-convolutional-neural-networks-see-the-world.html). This consists of generating images that activate certain filters in layers. This consists of using a loss on the filters' activation to then derive and apply gradients in the input space to gradually form input images that activate the given filters maximally. This is done for each filter separately.
 
-To run the visualization, one must edit `conv_filters_visualization.py` to make it load the good weights and then run `python3 conv_filters_visualization.py`. The images for layers will be seen under the folder `layers/` of this project.
+To run the visualization, one must edit `conv_filters_visualization.py` to make it load the good weights (in case a retraining was done) and then run `python3 conv_filters_visualization.py`. The images for layers will be seen under the folder `layers/` of this project.
 
+Here is an example for a low level layer, the one named `add_1`:
+
+<p align="center">
+  <img src="layers/add_1_best_filters_49_(7x7)_out_of_63.png">
+</p>
 
 ## License
 
@@ -207,6 +224,5 @@ The MIT License (MIT)
 
 Copyright (c) 2017 Vooban Inc.
 
-For more information on sublicensing and the use of other parts of open-source code, see: 
+For more information on sublicensing and the use of other parts of open-source code, see:
 https://github.com/Vooban/Hyperopt-Keras-CNN-CIFAR-100/blob/master/LICENSE
-
