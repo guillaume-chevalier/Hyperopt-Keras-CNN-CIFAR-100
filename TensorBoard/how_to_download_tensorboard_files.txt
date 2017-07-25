@@ -1,0 +1,6 @@
+Here is a link to the files that can be used in TensorBoard to run it by yourself with the best training results:
+
+https://drive.google.com/open?id=0BwkzQ-C71NK3X1JYc0tRUUFCV2c
+
+The downloaded subfolder needs to be placed here under the "TensorBoard/" directory. You may download a compressed version of the folder and uncompress it here. Then, follow the instructions in ../README.md to run your TensorBoard client.
+

@@ -195,6 +195,8 @@ Here is the command to run TensorBoard once located in the root directory of the
 tensorboard --logdir=TensorBoard/
 ```
 
+Logs for the best model can be downloaded manually (approximately 7 GB). Refer to the text file under the folder [TensorBoard](https://github.com/Vooban/Hyperopt-Keras-CNN-CIFAR-100/tree/master/TensorBoard) for directions on how to download the logs from Google Drive before running the TensorBoard client with the `tensorboard --logdir=TensorBoard/` command. 
+
 Just as an example, here is what can be seen in TensorBoard for the histograms related to the first convolutional layer, `conv2d_1`:
 
 <p align="center">
