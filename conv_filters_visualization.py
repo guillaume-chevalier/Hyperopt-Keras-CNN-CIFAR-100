@@ -109,9 +109,12 @@ input_img = model.input
 # Symbolic outputs of each "key" layer (we gave them unique names).
 layer_dict = {layer.name: layer for layer in model.layers[1:]}
 
-# Only convolutional layers are plotted.
-layers_to_plot = [l.name for l in model.layers if "conv" in l.name.lower()]
-# Note that it would work to also visualize pooling, BN, and dropout layers.
+# The type of layers plotted can be changed by changing the "add" keyword.
+# For example, we could plot every convolutional layer by replacing "add" by
+# "conv".
+layers_to_plot = [l.name for l in model.layers if "add" in l.name.lower()]
+# We take add because it is a strategic bottleneck from the residual
+# connections.
 
 for layer_name in layers_to_plot:
 
